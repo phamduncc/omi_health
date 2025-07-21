@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/health_goal.dart';
 import '../models/health_data.dart';
 import '../services/storage_service.dart';
+import '../services/goal_service.dart';
+import '../widgets/custom_input_field.dart';
+import '../widgets/custom_dropdown.dart';
+import 'goal_detail_screen.dart';
 
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
@@ -24,10 +29,15 @@ class _GoalsScreenState extends State<GoalsScreen> {
   Future<void> _loadData() async {
     // Load current health data
     final currentData = await StorageService.getLatestData();
-    
-    // Load goals (placeholder - sẽ implement storage cho goals)
-    final goals = _getSampleGoals();
-    
+
+    // Load goals from storage
+    final goals = await GoalService.getGoals();
+
+    // Update goal progress with latest health data
+    if (currentData != null) {
+      await GoalService.updateGoalProgress();
+    }
+
     setState(() {
       _currentData = currentData;
       _goals = goals;
@@ -35,32 +45,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
     });
   }
 
-  List<HealthGoal> _getSampleGoals() {
-    if (_currentData == null) return [];
-    
-    return [
-      HealthGoal(
-        id: '1',
-        type: GoalType.weightLoss,
-        targetValue: _currentData!.weight - 5,
-        currentValue: _currentData!.weight,
-        startDate: DateTime.now().subtract(const Duration(days: 7)),
-        targetDate: DateTime.now().add(const Duration(days: 60)),
-        title: 'Giảm 5kg',
-        description: 'Mục tiêu giảm cân an toàn trong 2 tháng',
-      ),
-      HealthGoal(
-        id: '2',
-        type: GoalType.bmiTarget,
-        targetValue: 22.0,
-        currentValue: _currentData!.bmi,
-        startDate: DateTime.now().subtract(const Duration(days: 14)),
-        targetDate: DateTime.now().add(const Duration(days: 90)),
-        title: 'BMI lý tưởng',
-        description: 'Đạt BMI 22.0 - mức lý tưởng cho sức khỏe',
-      ),
-    ];
-  }
+
 
   Color _getGoalColor(HealthGoal goal) {
     switch (goal.type) {
@@ -95,13 +80,77 @@ class _GoalsScreenState extends State<GoalsScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => _CreateGoalBottomSheet(
         currentData: _currentData,
-        onGoalCreated: (goal) {
-          setState(() {
-            _goals.add(goal);
-          });
+        onGoalCreated: (goal) async {
+          await GoalService.addGoal(goal);
+          _loadData(); // Reload data to show new goal
         },
       ),
     );
+  }
+
+  void _showEditGoalDialog(HealthGoal goal) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _EditGoalBottomSheet(
+        goal: goal,
+        currentData: _currentData,
+        onGoalUpdated: (updatedGoal) async {
+          await GoalService.updateGoal(updatedGoal);
+          _loadData();
+        },
+      ),
+    );
+  }
+
+  void _showDeleteGoalDialog(HealthGoal goal) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xóa mục tiêu'),
+        content: Text('Bạn có chắc chắn muốn xóa mục tiêu "${goal.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await GoalService.deleteGoal(goal.id);
+              _loadData();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Đã xóa mục tiêu'),
+                    backgroundColor: Color(0xFFE74C3C),
+                  ),
+                );
+              }
+            },
+            child: const Text('Xóa', style: TextStyle(color: Color(0xFFE74C3C))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _markGoalCompleted(HealthGoal goal) async {
+    final completedGoal = goal.copyWith(
+      isActive: false,
+      completedDate: DateTime.now(),
+    );
+    await GoalService.updateGoal(completedGoal);
+    _loadData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chúc mừng! Bạn đã hoàn thành mục tiêu'),
+          backgroundColor: Color(0xFF2ECC71),
+        ),
+      );
+    }
   }
 
   @override
@@ -316,9 +365,19 @@ class _GoalsScreenState extends State<GoalsScreen> {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GoalDetailScreen(goal: goal),
+            ),
+          ).then((_) => _loadData()); // Reload when returning
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -358,20 +417,75 @@ class _GoalsScreenState extends State<GoalsScreen> {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    goal.status,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        goal.status,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 20),
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'edit':
+                            _showEditGoalDialog(goal);
+                            break;
+                          case 'delete':
+                            _showDeleteGoalDialog(goal);
+                            break;
+                          case 'complete':
+                            _markGoalCompleted(goal);
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit, size: 16),
+                              SizedBox(width: 8),
+                              Text('Chỉnh sửa'),
+                            ],
+                          ),
+                        ),
+                        if (goal.progressPercentage < 100)
+                          const PopupMenuItem(
+                            value: 'complete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.check_circle, size: 16),
+                                SizedBox(width: 8),
+                                Text('Đánh dấu hoàn thành'),
+                              ],
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, size: 16, color: Color(0xFFE74C3C)),
+                              SizedBox(width: 8),
+                              Text('Xóa', style: TextStyle(color: Color(0xFFE74C3C))),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -438,7 +552,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildGoalDetail(String label, String value) {
@@ -479,16 +593,145 @@ class _CreateGoalBottomSheet extends StatefulWidget {
 }
 
 class _CreateGoalBottomSheetState extends State<_CreateGoalBottomSheet> {
+  final _formKey = GlobalKey<FormState>();
   GoalType _selectedType = GoalType.weightLoss;
   final _targetController = TextEditingController();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   DateTime _targetDate = DateTime.now().add(const Duration(days: 30));
+  bool _isLoading = false;
+
+  final List<String> _goalTypes = [
+    'Giảm cân',
+    'Tăng cân',
+    'Duy trì cân nặng',
+    'Đạt BMI mục tiêu',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _updateGoalDefaults();
+  }
+
+  void _updateGoalDefaults() {
+    if (widget.currentData == null) return;
+
+    switch (_selectedType) {
+      case GoalType.weightLoss:
+        _titleController.text = 'Giảm cân lành mạnh';
+        _descriptionController.text = 'Giảm cân an toàn và bền vững';
+        _targetController.text = (widget.currentData!.weight - 5).toStringAsFixed(1);
+        break;
+      case GoalType.weightGain:
+        _titleController.text = 'Tăng cân lành mạnh';
+        _descriptionController.text = 'Tăng cân an toàn để đạt BMI bình thường';
+        _targetController.text = (widget.currentData!.weight + 5).toStringAsFixed(1);
+        break;
+      case GoalType.maintain:
+        _titleController.text = 'Duy trì cân nặng';
+        _descriptionController.text = 'Duy trì cân nặng hiện tại';
+        _targetController.text = widget.currentData!.weight.toStringAsFixed(1);
+        break;
+      case GoalType.bmiTarget:
+        _titleController.text = 'BMI lý tưởng';
+        _descriptionController.text = 'Đạt chỉ số BMI lý tưởng cho sức khỏe';
+        _targetController.text = '22.0';
+        break;
+    }
+  }
+
+  String _getGoalTypeString(GoalType type) {
+    switch (type) {
+      case GoalType.weightLoss:
+        return 'Giảm cân';
+      case GoalType.weightGain:
+        return 'Tăng cân';
+      case GoalType.maintain:
+        return 'Duy trì cân nặng';
+      case GoalType.bmiTarget:
+        return 'Đạt BMI mục tiêu';
+    }
+  }
+
+  GoalType _getGoalTypeFromString(String typeString) {
+    switch (typeString) {
+      case 'Giảm cân':
+        return GoalType.weightLoss;
+      case 'Tăng cân':
+        return GoalType.weightGain;
+      case 'Duy trì cân nặng':
+        return GoalType.maintain;
+      case 'Đạt BMI mục tiêu':
+        return GoalType.bmiTarget;
+      default:
+        return GoalType.weightLoss;
+    }
+  }
+
+  String _getTargetUnit() {
+    return _selectedType == GoalType.bmiTarget ? '' : 'kg';
+  }
+
+  String _getTargetHint() {
+    switch (_selectedType) {
+      case GoalType.weightLoss:
+        return 'Cân nặng mục tiêu (kg)';
+      case GoalType.weightGain:
+        return 'Cân nặng mục tiêu (kg)';
+      case GoalType.maintain:
+        return 'Cân nặng duy trì (kg)';
+      case GoalType.bmiTarget:
+        return 'BMI mục tiêu (18.5-24.9)';
+    }
+  }
+
+  Future<void> _createGoal() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (widget.currentData == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final targetValue = double.parse(_targetController.text);
+      final currentValue = _selectedType == GoalType.bmiTarget
+          ? widget.currentData!.bmi
+          : widget.currentData!.weight;
+
+      final goal = HealthGoal(
+        id: 'goal_${DateTime.now().millisecondsSinceEpoch}',
+        type: _selectedType,
+        targetValue: targetValue,
+        currentValue: currentValue,
+        startValue: currentValue,
+        startDate: DateTime.now(),
+        targetDate: _targetDate,
+        title: _titleController.text,
+        description: _descriptionController.text,
+      );
+
+      widget.onGoalCreated(goal);
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Có lỗi xảy ra khi tạo mục tiêu'),
+          backgroundColor: Color(0xFFE74C3C),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.8,
+      height: MediaQuery.of(context).size.height * 0.9,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -500,72 +743,606 @@ class _CreateGoalBottomSheetState extends State<_CreateGoalBottomSheet> {
           top: 20,
           bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            
-            const Text(
-              'Tạo mục tiêu mới',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2C3E50),
-              ),
-            ),
-            const SizedBox(height: 20),
-            
-            // Goal Type Selection
-            const Text(
-              'Loại mục tiêu',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2C3E50),
-              ),
-            ),
-            const SizedBox(height: 8),
-            
-            // Simplified create goal form
-            Text(
-              'Tính năng tạo mục tiêu sẽ được phát triển trong phiên bản tiếp theo',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-            
-            const Spacer(),
-            
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3498DB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                child: const Text('Đóng'),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Tạo mục tiêu mới',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2C3E50),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Goal Type Selection
+                      CustomDropdown(
+                        label: 'Loại mục tiêu',
+                        value: _getGoalTypeString(_selectedType),
+                        items: _goalTypes,
+                        prefixIcon: Icons.flag,
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedType = _getGoalTypeFromString(value!);
+                            _updateGoalDefaults();
+                          });
+                        },
+                      ),
+
+                      // Title
+                      CustomInputField(
+                        label: 'Tên mục tiêu',
+                        hint: 'Nhập tên cho mục tiêu của bạn',
+                        controller: _titleController,
+                        prefixIcon: Icons.title,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Vui lòng nhập tên mục tiêu';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Target Value
+                      CustomInputField(
+                        label: 'Giá trị mục tiêu',
+                        hint: _getTargetHint(),
+                        controller: _targetController,
+                        suffix: _getTargetUnit(),
+                        keyboardType: TextInputType.number,
+                        prefixIcon: Icons.track_changes,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,1}')),
+                        ],
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Vui lòng nhập giá trị mục tiêu';
+                          }
+                          final target = double.tryParse(value);
+                          if (target == null || target <= 0) {
+                            return 'Giá trị không hợp lệ';
+                          }
+
+                          if (_selectedType == GoalType.bmiTarget) {
+                            if (target < 15 || target > 35) {
+                              return 'BMI phải trong khoảng 15-35';
+                            }
+                          } else {
+                            if (target < 30 || target > 200) {
+                              return 'Cân nặng phải trong khoảng 30-200kg';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Description
+                      CustomInputField(
+                        label: 'Mô tả',
+                        hint: 'Mô tả chi tiết về mục tiêu',
+                        controller: _descriptionController,
+                        prefixIcon: Icons.description,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Vui lòng nhập mô tả';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Target Date
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Ngày hoàn thành dự kiến',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: _targetDate,
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                                );
+                                if (date != null) {
+                                  setState(() {
+                                    _targetDate = date;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withValues(alpha: 0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.calendar_today,
+                                      color: Color(0xFF3498DB),
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '${_targetDate.day}/${_targetDate.month}/${_targetDate.year}',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF2C3E50),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.grey,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Create Button
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _createGoal,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3498DB),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Tạo mục tiêu',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _targetController.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+}
+
+class _EditGoalBottomSheet extends StatefulWidget {
+  final HealthGoal goal;
+  final HealthData? currentData;
+  final Function(HealthGoal) onGoalUpdated;
+
+  const _EditGoalBottomSheet({
+    required this.goal,
+    required this.currentData,
+    required this.onGoalUpdated,
+  });
+
+  @override
+  State<_EditGoalBottomSheet> createState() => _EditGoalBottomSheetState();
+}
+
+class _EditGoalBottomSheetState extends State<_EditGoalBottomSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late GoalType _selectedType;
+  late final TextEditingController _targetController;
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late DateTime _targetDate;
+  bool _isLoading = false;
+
+  final List<String> _goalTypes = [
+    'Giảm cân',
+    'Tăng cân',
+    'Duy trì cân nặng',
+    'Đạt BMI mục tiêu',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = widget.goal.type;
+    _targetController = TextEditingController(text: widget.goal.targetValue.toStringAsFixed(1));
+    _titleController = TextEditingController(text: widget.goal.title);
+    _descriptionController = TextEditingController(text: widget.goal.description);
+    _targetDate = widget.goal.targetDate;
+  }
+
+  String _getGoalTypeString(GoalType type) {
+    switch (type) {
+      case GoalType.weightLoss:
+        return 'Giảm cân';
+      case GoalType.weightGain:
+        return 'Tăng cân';
+      case GoalType.maintain:
+        return 'Duy trì cân nặng';
+      case GoalType.bmiTarget:
+        return 'Đạt BMI mục tiêu';
+    }
+  }
+
+  GoalType _getGoalTypeFromString(String typeString) {
+    switch (typeString) {
+      case 'Giảm cân':
+        return GoalType.weightLoss;
+      case 'Tăng cân':
+        return GoalType.weightGain;
+      case 'Duy trì cân nặng':
+        return GoalType.maintain;
+      case 'Đạt BMI mục tiêu':
+        return GoalType.bmiTarget;
+      default:
+        return GoalType.weightLoss;
+    }
+  }
+
+  String _getTargetUnit() {
+    return _selectedType == GoalType.bmiTarget ? '' : 'kg';
+  }
+
+  String _getTargetHint() {
+    switch (_selectedType) {
+      case GoalType.weightLoss:
+        return 'Cân nặng mục tiêu (kg)';
+      case GoalType.weightGain:
+        return 'Cân nặng mục tiêu (kg)';
+      case GoalType.maintain:
+        return 'Cân nặng duy trì (kg)';
+      case GoalType.bmiTarget:
+        return 'BMI mục tiêu (18.5-24.9)';
+    }
+  }
+
+  Future<void> _updateGoal() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final targetValue = double.parse(_targetController.text);
+
+      final updatedGoal = widget.goal.copyWith(
+        type: _selectedType,
+        targetValue: targetValue,
+        targetDate: _targetDate,
+        title: _titleController.text,
+        description: _descriptionController.text,
+      );
+
+      widget.onGoalUpdated(updatedGoal);
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Có lỗi xảy ra khi cập nhật mục tiêu'),
+          backgroundColor: Color(0xFFE74C3C),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Chỉnh sửa mục tiêu',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2C3E50),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Goal Type Selection
+                      CustomDropdown(
+                        label: 'Loại mục tiêu',
+                        value: _getGoalTypeString(_selectedType),
+                        items: _goalTypes,
+                        prefixIcon: Icons.flag,
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedType = _getGoalTypeFromString(value!);
+                          });
+                        },
+                      ),
+
+                      // Title
+                      CustomInputField(
+                        label: 'Tên mục tiêu',
+                        hint: 'Nhập tên cho mục tiêu của bạn',
+                        controller: _titleController,
+                        prefixIcon: Icons.title,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Vui lòng nhập tên mục tiêu';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Target Value
+                      CustomInputField(
+                        label: 'Giá trị mục tiêu',
+                        hint: _getTargetHint(),
+                        controller: _targetController,
+                        suffix: _getTargetUnit(),
+                        keyboardType: TextInputType.number,
+                        prefixIcon: Icons.track_changes,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,1}')),
+                        ],
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Vui lòng nhập giá trị mục tiêu';
+                          }
+                          final target = double.tryParse(value);
+                          if (target == null || target <= 0) {
+                            return 'Giá trị không hợp lệ';
+                          }
+
+                          if (_selectedType == GoalType.bmiTarget) {
+                            if (target < 15 || target > 35) {
+                              return 'BMI phải trong khoảng 15-35';
+                            }
+                          } else {
+                            if (target < 30 || target > 200) {
+                              return 'Cân nặng phải trong khoảng 30-200kg';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Description
+                      CustomInputField(
+                        label: 'Mô tả',
+                        hint: 'Mô tả chi tiết về mục tiêu',
+                        controller: _descriptionController,
+                        prefixIcon: Icons.description,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Vui lòng nhập mô tả';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Target Date
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Ngày hoàn thành dự kiến',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: _targetDate,
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                                );
+                                if (date != null) {
+                                  setState(() {
+                                    _targetDate = date;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withValues(alpha: 0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.calendar_today,
+                                      color: Color(0xFF3498DB),
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '${_targetDate.day}/${_targetDate.month}/${_targetDate.year}',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF2C3E50),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.grey,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Update Button
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _updateGoal,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3498DB),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Cập nhật mục tiêu',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _targetController.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
   }
 }

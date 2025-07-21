@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/health_data.dart';
+import 'goal_service.dart';
 
 class StorageService {
   static const String _historyKey = 'health_history';
@@ -28,15 +29,22 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     final historyString = prefs.getString(_historyKey) ?? '[]';
     final List<dynamic> history = jsonDecode(historyString);
-    
+
     history.add(data.toMap());
-    
+
     // Giữ tối đa 50 bản ghi
     if (history.length > 50) {
       history.removeAt(0);
     }
-    
+
     await prefs.setString(_historyKey, jsonEncode(history));
+
+    // Cập nhật tiến độ mục tiêu khi có dữ liệu mới
+    try {
+      await GoalService.updateGoalProgress();
+    } catch (e) {
+      // Ignore errors to avoid breaking the main flow
+    }
   }
 
   // Lấy lịch sử
