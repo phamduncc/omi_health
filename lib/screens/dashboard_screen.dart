@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/health_data.dart';
+import '../models/health_goal.dart';
 import '../services/storage_service.dart';
+import '../services/goal_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/result_card.dart';
+import '../widgets/notification_banner.dart';
+import '../widgets/real_time_progress_widget.dart';
+import '../widgets/quick_utilities_widget.dart';
 import 'history_screen.dart';
+import 'charts_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,7 +22,10 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   HealthData? _latestData;
   List<HealthData> _recentHistory = [];
+  List<HealthGoal> _activeGoals = [];
   bool _isLoading = true;
+  bool _showNotification = false;
+  NotificationType? _notificationType;
 
   @override
   void initState() {
@@ -26,10 +36,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadData() async {
     final latest = await StorageService.getLatestData();
     final history = await StorageService.getHistory();
-    
+
+    // Cập nhật current values cho mục tiêu nếu có dữ liệu mới nhất
+    if (latest != null) {
+      await GoalService.updateCurrentValues(latest);
+    }
+
+    final activeGoals = await GoalService.getActiveGoals();
+
+    // Kiểm tra notifications
+    bool showNotification = false;
+    NotificationType? notificationType;
+
+    for (final type in NotificationType.values) {
+      if (await NotificationService.shouldShowNotification(type)) {
+        showNotification = true;
+        notificationType = type;
+        break;
+      }
+    }
+
     setState(() {
       _latestData = latest;
       _recentHistory = history.length > 7 ? history.sublist(history.length - 7) : history;
+      _activeGoals = activeGoals;
+      _showNotification = showNotification;
+      _notificationType = notificationType;
       _isLoading = false;
     });
   }
@@ -39,6 +71,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (bmi < 25) return const Color(0xFF2ECC71);
     if (bmi < 30) return const Color(0xFFF39C12);
     return const Color(0xFFE74C3C);
+  }
+
+  Color _getColorFromHex(String hexColor) {
+    final hex = hexColor.replaceAll('#', '');
+    return Color(int.parse('FF$hex', radix: 16));
   }
 
   List<FlSpot> _getWeightTrendData() {
@@ -90,6 +127,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Notification Banner
+                    if (_showNotification && _notificationType != null)
+                      NotificationBanner(
+                        type: _notificationType!,
+                        onDismiss: () {
+                          setState(() {
+                            _showNotification = false;
+                          });
+                        },
+                      ),
                     // Welcome Card
                     Container(
                       width: double.infinity,
@@ -103,7 +150,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF3498DB).withOpacity(0.3),
+                            color: const Color(0xFF3498DB).withValues(alpha: 0.3),
                             blurRadius: 15,
                             offset: const Offset(0, 8),
                           ),
@@ -117,7 +164,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Icon(
@@ -189,7 +236,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
+                              color: Colors.grey.withValues(alpha: 0.1),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -241,12 +288,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
+                                  builder: (context) => const ChartsScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.bar_chart, size: 16),
+                            label: const Text('Biểu đồ'),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
                                   builder: (context) => const HistoryScreen(),
                                 ),
                               );
                             },
                             icon: const Icon(Icons.history, size: 16),
-                            label: const Text('Xem tất cả'),
+                            label: const Text('Lịch sử'),
                           ),
                         ],
                       ),
@@ -287,7 +347,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
 
+                      // Additional Health Metrics (if available)
+                      if (_latestData!.whr != null || _latestData!.bodyFatPercentage != null) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            if (_latestData!.whr != null) ...[
+                              Expanded(
+                                child: _buildMetricCard(
+                                  'WHR',
+                                  _latestData!.whr!.toStringAsFixed(2),
+                                  _latestData!.whrCategory ?? 'Không xác định',
+                                  Icons.straighten,
+                                  _getColorFromHex(_latestData!.whrCategoryColor ?? '#95a5a6'),
+                                ),
+                              ),
+                              if (_latestData!.bodyFatPercentage != null) const SizedBox(width: 12),
+                            ],
+                            if (_latestData!.bodyFatPercentage != null) ...[
+                              Expanded(
+                                child: _buildMetricCard(
+                                  'Mỡ cơ thể',
+                                  '${_latestData!.bodyFatPercentage!.toStringAsFixed(1)}%',
+                                  _latestData!.bodyFatCategory ?? 'Không xác định',
+                                  Icons.pie_chart,
+                                  _getColorFromHex(_latestData!.bodyFatCategoryColor ?? '#95a5a6'),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+
                       const SizedBox(height: 24),
+
+                      // Quick Utilities Widget
+                      const QuickUtilitiesWidget(),
+
+                      const SizedBox(height: 24),
+
+                      // Real-time Progress Widget
+                      const RealTimeProgressWidget(
+                        showHeader: true,
+                        showSummary: true,
+                        maxGoalsToShow: 3,
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Active Goals Section
+                      if (_activeGoals.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Text(
+                              'Mục tiêu đang thực hiện',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${_activeGoals.length} mục tiêu',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 120,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _activeGoals.length,
+                            itemBuilder: (context, index) {
+                              final goal = _activeGoals[index];
+                              return _buildGoalCard(goal);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
 
                       // Weight Trend Chart
                       if (_recentHistory.length >= 2) ...[
@@ -308,7 +451,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.grey.withOpacity(0.1),
+                                color: Colors.grey.withValues(alpha: 0.1),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -361,7 +504,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                   belowBarData: BarAreaData(
                                     show: true,
-                                    color: const Color(0xFF3498DB).withOpacity(0.1),
+                                    color: const Color(0xFF3498DB).withValues(alpha: 0.1),
                                   ),
                                 ),
                               ],
@@ -381,7 +524,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -424,7 +567,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -466,5 +609,107 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildGoalCard(HealthGoal goal) {
+    final color = _getGoalColor(goal);
+    final progress = goal.progressPercentage / 100;
+
+    return Container(
+      width: 200,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: color.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                _getGoalIcon(goal),
+                color: color,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  goal.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2C3E50),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${goal.progressPercentage.toStringAsFixed(1)}% hoàn thành',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: progress,
+            backgroundColor: Colors.grey[200],
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+            minHeight: 4,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${goal.daysRemaining} ngày còn lại',
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getGoalColor(HealthGoal goal) {
+    switch (goal.type) {
+      case GoalType.weightLoss:
+        return const Color(0xFFE74C3C);
+      case GoalType.weightGain:
+        return const Color(0xFF2ECC71);
+      case GoalType.maintain:
+        return const Color(0xFF3498DB);
+      case GoalType.bmiTarget:
+        return const Color(0xFF9B59B6);
+    }
+  }
+
+  IconData _getGoalIcon(HealthGoal goal) {
+    switch (goal.type) {
+      case GoalType.weightLoss:
+        return Icons.trending_down;
+      case GoalType.weightGain:
+        return Icons.trending_up;
+      case GoalType.maintain:
+        return Icons.trending_flat;
+      case GoalType.bmiTarget:
+        return Icons.flag;
+    }
   }
 }

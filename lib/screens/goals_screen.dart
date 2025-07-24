@@ -6,6 +6,8 @@ import '../services/storage_service.dart';
 import '../services/goal_service.dart';
 import '../widgets/custom_input_field.dart';
 import '../widgets/custom_dropdown.dart';
+import '../widgets/real_time_progress_widget.dart';
+import '../services/goal_progress_service.dart';
 import 'goal_detail_screen.dart';
 
 class GoalsScreen extends StatefulWidget {
@@ -19,6 +21,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
   List<HealthGoal> _goals = [];
   HealthData? _currentData;
   bool _isLoading = true;
+  List<HealthGoal> _newGoals = [];
 
   @override
   void initState() {
@@ -33,14 +36,28 @@ class _GoalsScreenState extends State<GoalsScreen> {
     // Load goals from storage
     final goals = await GoalService.getGoals();
 
-    // Update goal progress with latest health data
+    // Update current values and goal progress with latest health data
     if (currentData != null) {
+      await GoalService.updateCurrentValues(currentData);
       await GoalService.updateGoalProgress();
+
+      // Reload goals to get updated values
+      final updatedGoals = await GoalService.getGoals();
+      goals.clear();
+      goals.addAll(updatedGoals);
     }
+
+    // Tìm mục tiêu mới (được tạo trong 10 phút qua)
+    final now = DateTime.now();
+    final newGoals = goals.where((goal) {
+      final timeDiff = now.difference(goal.startDate).inMinutes;
+      return timeDiff <= 10 && goal.isActive;
+    }).toList();
 
     setState(() {
       _currentData = currentData;
       _goals = goals;
+      _newGoals = newGoals;
       _isLoading = false;
     });
   }
@@ -172,6 +189,31 @@ class _GoalsScreenState extends State<GoalsScreen> {
               : _goals.isEmpty
                   ? _buildEmptyState()
                   : _buildGoalsList(),
+      floatingActionButton: AnimatedBuilder(
+        animation: GoalProgressService(),
+        builder: (context, child) {
+          final service = GoalProgressService();
+          return FloatingActionButton(
+            onPressed: service.isUpdating ? null : () async {
+              await service.forceUpdate();
+              _loadData();
+            },
+            backgroundColor: service.isUpdating
+                ? Colors.grey[400]
+                : const Color(0xFF3498DB),
+            child: service.isUpdating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.refresh, color: Colors.white),
+          );
+        },
+      ),
     );
   }
 
@@ -263,13 +305,29 @@ class _GoalsScreenState extends State<GoalsScreen> {
       onRefresh: _loadData,
       child: ListView.builder(
         padding: const EdgeInsets.all(20),
-        itemCount: _goals.length + 1, // +1 for header
+        itemCount: _goals.length + (_newGoals.isNotEmpty ? 3 : 2), // +1 for header, +1 for progress widget, +1 for new goals banner
         itemBuilder: (context, index) {
           if (index == 0) {
             return _buildHeader();
           }
-          
-          final goal = _goals[index - 1];
+
+          if (index == 1) {
+            return const Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: RealTimeProgressWidget(
+                showHeader: true,
+                showSummary: true,
+                maxGoalsToShow: 5,
+              ),
+            );
+          }
+
+          if (_newGoals.isNotEmpty && index == 2) {
+            return _buildNewGoalsBanner();
+          }
+
+          final goalIndex = _newGoals.isNotEmpty ? index - 3 : index - 2;
+          final goal = _goals[goalIndex];
           return _buildGoalCard(goal);
         },
       ),
@@ -314,6 +372,135 @@ class _GoalsScreenState extends State<GoalsScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNewGoalsBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF3498DB), Color(0xFF2980B9)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF3498DB).withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _newGoals.length == 1
+                          ? 'Mục tiêu mới đã được tạo!'
+                          : '${_newGoals.length} mục tiêu mới đã được tạo!',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Chúng tôi đã tự động tạo mục tiêu phù hợp dựa trên tiến độ của bạn',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _newGoals.clear();
+                  });
+                },
+                icon: const Icon(
+                  Icons.close,
+                  color: Colors.white70,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...(_newGoals.take(2).map((goal) => Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _getGoalIcon(goal),
+                  color: Colors.white,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    goal.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${goal.daysRemaining} ngày',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ))),
+          if (_newGoals.length > 2)
+            Container(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                'và ${_newGoals.length - 2} mục tiêu khác...',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -531,11 +718,12 @@ class _GoalsScreenState extends State<GoalsScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _buildGoalDetail(
+                  child: _buildGoalDetailWithUpdate(
                     'Hiện tại',
-                    goal.type == GoalType.bmiTarget 
+                    goal.type == GoalType.bmiTarget
                         ? goal.currentValue.toStringAsFixed(1)
                         : '${goal.currentValue.toStringAsFixed(1)} kg',
+                    showUpdateIndicator: true,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -573,6 +761,67 @@ class _GoalsScreenState extends State<GoalsScreen> {
             fontWeight: FontWeight.bold,
             color: Color(0xFF2C3E50),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGoalDetailWithUpdate(String label, String value, {bool showUpdateIndicator = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[600],
+              ),
+            ),
+            if (showUpdateIndicator) ...[
+              const SizedBox(width: 6),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF2ECC71),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2C3E50),
+              ),
+            ),
+            if (showUpdateIndicator) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2ECC71).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Mới',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2ECC71),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );

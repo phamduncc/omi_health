@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/main_navigation.dart';
+import 'services/goal_progress_service.dart';
+import 'services/ai_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Khởi tạo các services
+  await GoalProgressService().initialize();
+  AIService().initialize();
+
   runApp(const MyApp());
 }
 

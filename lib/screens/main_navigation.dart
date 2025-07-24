@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../services/navigation_service.dart';
 import 'home_screen.dart';
 import 'dashboard_screen.dart';
 import 'goals_screen.dart';
 import 'tips_screen.dart';
 import 'profile_screen.dart';
+import 'utilities_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -14,11 +16,13 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
+  final NavigationService _navigationService = NavigationService();
   
   final List<Widget> _screens = [
     const DashboardScreen(),
     const HomeScreen(),
     const GoalsScreen(),
+    const UtilitiesScreen(),
     const TipsScreen(),
     const ProfileScreen(),
   ];
@@ -40,6 +44,11 @@ class _MainNavigationState extends State<MainNavigation> {
       label: 'Mục tiêu',
     ),
     const BottomNavigationBarItem(
+      icon: Icon(Icons.build_outlined),
+      activeIcon: Icon(Icons.build),
+      label: 'Tiện ích',
+    ),
+    const BottomNavigationBarItem(
       icon: Icon(Icons.lightbulb_outlined),
       activeIcon: Icon(Icons.lightbulb),
       label: 'Lời khuyên',
@@ -52,6 +61,27 @@ class _MainNavigationState extends State<MainNavigation> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Listen to navigation service changes
+    _navigationService.currentTabIndex.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    _navigationService.currentTabIndex.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (mounted) {
+      setState(() {
+        _currentIndex = _navigationService.currentTabIndex.value;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
@@ -62,7 +92,7 @@ class _MainNavigationState extends State<MainNavigation> {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),
@@ -74,6 +104,8 @@ class _MainNavigationState extends State<MainNavigation> {
             setState(() {
               _currentIndex = index;
             });
+            // Update navigation service
+            _navigationService.currentTabIndex.value = index;
           },
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,

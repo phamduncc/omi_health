@@ -214,6 +214,215 @@ Mỗi động tác 45 giây, nghỉ 15 giây:
         tags: ['ngủ', 'sức khỏe', 'chất lượng'],
         readTime: 4,
       ),
+
+      HealthTip(
+        id: '6',
+        title: 'Cách đọc nhãn thực phẩm thông minh',
+        content: '''Hướng dẫn đọc nhãn thực phẩm để chọn sản phẩm tốt cho sức khỏe:
+
+**Thứ tự ưu tiên khi đọc nhãn:**
+1. **Danh sách thành phần** (quan trọng nhất)
+2. **Thông tin dinh dưỡng**
+3. **Hạn sử dụng**
+4. **Xuất xứ**
+
+**Nguyên tắc vàng:**
+- Thành phần được liệt kê theo thứ tự từ nhiều đến ít
+- Tránh sản phẩm có quá nhiều thành phần (>10 loại)
+- Tránh chất bảo quản, màu nhân tạo, hương liệu
+
+**Chú ý các từ khóa:**
+❌ **Tránh**: Đường glucose, xi-rô ngô, chất tạo ngọt nhân tạo
+❌ **Hạn chế**: Natri >600mg/100g, đường >15g/100g
+✅ **Ưu tiên**: Nguyên liệu tự nhiên, ít chế biến
+
+**Mẹo nhận biết:**
+- "Không đường" ≠ "Không calories"
+- "Tự nhiên" không có nghĩa là "Lành mạnh"
+- Kiểm tra cả khối lượng thực tế, không chỉ %
+
+**Ví dụ thực tế:**
+- Sữa chua: Chọn loại có ít đường, nhiều protein
+- Bánh mì: Ưu tiên nguyên cám, ít natri
+- Nước uống: Đọc kỹ lượng đường và chất tạo ngọt''',
+        category: TipCategory.nutrition,
+        tags: ['nhãn thực phẩm', 'mua sắm', 'dinh dưỡng'],
+        readTime: 3,
+      ),
+
+      HealthTip(
+        id: '7',
+        title: 'Bài tập HIIT 20 phút đốt cháy mỡ thừa',
+        content: '''Bài tập HIIT (High-Intensity Interval Training) hiệu quả:
+
+**Cấu trúc bài tập (20 phút):**
+- Khởi động: 3 phút
+- HIIT chính: 14 phút (7 vòng × 2 phút)
+- Thư giãn: 3 phút
+
+**Chu kỳ HIIT (2 phút/vòng):**
+- Tập cường độ cao: 40 giây
+- Nghỉ ngơi: 20 giây
+- Tập vừa phải: 40 giây
+- Nghỉ ngơi: 20 giây
+
+**7 bài tập chính:**
+1. **Burpees** - Toàn thân
+2. **Jump Squats** - Chân, mông
+3. **Mountain Climbers** - Bụng, tim phổi
+4. **High Knees** - Chân, cardio
+5. **Push-ups** - Ngực, tay
+6. **Plank Jacks** - Bụng, vai
+7. **Jumping Lunges** - Chân, cân bằng
+
+**Lợi ích HIIT:**
+- Đốt cháy calories trong và sau tập (EPOC)
+- Cải thiện sức khỏe tim mạch
+- Tiết kiệm thời gian
+- Không cần dụng cụ
+
+**Lưu ý an toàn:**
+- Khởi động kỹ trước khi tập
+- Nghe cơ thể, nghỉ khi cần
+- Tập 3-4 lần/tuần, không liên tiếp
+- Uống nước đủ trước, trong và sau tập''',
+        category: TipCategory.exercise,
+        tags: ['HIIT', 'đốt mỡ', 'cardio', 'tại nhà'],
+        readTime: 4,
+      ),
+
+      HealthTip(
+        id: '8',
+        title: 'Quản lý stress bằng phương pháp 5-4-3-2-1',
+        content: '''Kỹ thuật 5-4-3-2-1 giúp giảm lo âu và stress tức thì:
+
+**Cách thực hiện:**
+Khi cảm thấy căng thẳng, hãy tìm:
+
+**5 thứ bạn có thể NHÌN thấy**
+- Quan sát xung quanh
+- Tập trung vào chi tiết
+- Mô tả màu sắc, hình dạng
+
+**4 thứ bạn có thể CHẠM vào**
+- Cảm nhận kết cấu
+- Nhiệt độ, độ mềm/cứng
+- Áo quần, bàn ghế, điện thoại
+
+**3 thứ bạn có thể NGHE thấy**
+- Âm thanh xung quanh
+- Tiếng xe cộ, gió, nhạc
+- Thậm chí tiếng thở của bạn
+
+**2 thứ bạn có thể NGỬI**
+- Mùi hương trong không khí
+- Nước hoa, thức ăn, không khí
+
+**1 thứ bạn có thể NẾM**
+- Vị trong miệng
+- Uống một ngụm nước
+- Kẹo cao su, bạc hà
+
+**Tại sao hiệu quả:**
+- Đưa tâm trí về hiện tại
+- Ngắt chu kỳ suy nghĩ tiêu cực
+- Kích hoạt hệ thần kinh phó giao cảm
+- Dễ thực hiện mọi lúc, mọi nơi
+
+**Mẹo áp dụng:**
+- Thực hiện chậm rãi, không vội vàng
+- Tập luyện khi bình tĩnh để thành thói quen
+- Kết hợp với thở sâu
+- Có thể làm nhiều lần nếu cần''',
+        category: TipCategory.mental,
+        tags: ['stress', 'lo âu', 'mindfulness', 'tức thì'],
+        readTime: 3,
+      ),
+
+      HealthTip(
+        id: '9',
+        title: 'Meal prep - Chuẩn bị bữa ăn lành mạnh cả tuần',
+        content: '''Hướng dẫn meal prep hiệu quả cho người bận rộn:
+
+**Lập kế hoạch (Chủ nhật):**
+- Chọn 3-4 món chính cho tuần
+- Lên danh sách mua sắm
+- Chuẩn bị hộp đựng thức ăn
+
+**Nguyên tắc cân bằng mỗi bữa:**
+- 1/2 đĩa: Rau xanh, rau củ
+- 1/4 đĩa: Protein (thịt, cá, trứng, đậu)
+- 1/4 đĩa: Carbs (cơm, khoai, yến mạch)
+- Chất béo tốt: Dầu olive, bơ, hạt
+
+**Menu mẫu 1 tuần:**
+**Thứ 2-3:** Gà nướng + Rau củ nướng + Cơm gạo lứt
+**Thứ 4-5:** Cá hồi + Salad + Khoai lang
+**Thứ 6-7:** Thịt bò xào + Bông cải + Mì ý nguyên cám
+**Chủ nhật:** Trứng + Rau xanh + Bánh mì nguyên cám
+
+**Mẹo bảo quản:**
+- Nấu chín protein, để riêng rau sống
+- Dùng hộp thủy tinh, tránh nhựa
+- Đông lạnh được 3 tháng, tủ lạnh 3-4 ngày
+- Ghi nhãn ngày tháng
+
+**Lợi ích meal prep:**
+- Tiết kiệm 3-4 giờ/tuần
+- Kiểm soát được dinh dưỡng
+- Giảm stress quyết định ăn gì
+- Tiết kiệm tiền, giảm lãng phí thực phẩm''',
+        category: TipCategory.nutrition,
+        tags: ['meal prep', 'tiết kiệm thời gian', 'dinh dưỡng', 'lành mạnh'],
+        readTime: 4,
+      ),
+
+      HealthTip(
+        id: '10',
+        title: 'Cải thiện tư thế ngồi làm việc',
+        content: '''Hướng dẫn ngồi đúng cách để bảo vệ cột sống:
+
+**Tư thế ngồi chuẩn:**
+- **Chân**: Đặt phẳng sàn, góc 90°
+- **Đùi**: Song song với sàn
+- **Lưng**: Tựa thẳng vào ghế
+- **Vai**: Thả lỏng, không nhún
+- **Cổ**: Thẳng, không cúi quá nhiều
+- **Mắt**: Ngang tầm màn hình
+
+**Thiết lập không gian làm việc:**
+- **Màn hình**: Cách mắt 50-70cm
+- **Bàn phím**: Cùng tầm khuỷu tay
+- **Chuột**: Gần bàn phím
+- **Ghế**: Có tựa lưng, điều chỉnh được
+- **Ánh sáng**: Đủ sáng, không chói
+
+**Bài tập giãn cơ tại chỗ:**
+**Mỗi 30 phút:**
+1. Xoay cổ 5 vòng mỗi chiều
+2. Nhún vai 10 lần
+3. Duỗi tay lên cao 10 giây
+
+**Mỗi 1 tiếng:**
+1. Đứng dậy đi lại 2-3 phút
+2. Duỗi lưng, uốn người ra sau
+3. Xoay eo trái phải
+
+**Dấu hiệu cần chú ý:**
+❌ Đau lưng, cổ thường xuyên
+❌ Tê bì tay chân
+❌ Mỏi mắt, nhức đầu
+❌ Vai gù, cong lưng
+
+**Giải pháp lâu dài:**
+- Đầu tư ghế ergonomic tốt
+- Sử dụng đế kê chân nếu cần
+- Tập yoga, pilates để tăng cường cột sống
+- Khám sức khỏe định kỳ''',
+        category: TipCategory.lifestyle,
+        tags: ['tư thế', 'văn phòng', 'cột sống', 'ergonomic'],
+        readTime: 3,
+      ),
     ];
   }
 
