@@ -5,6 +5,9 @@ import 'daily_tracking_screen.dart';
 import 'charts_screen.dart';
 import 'ai_assistant_screen.dart';
 import 'ai_analytics_screen.dart';
+import 'comparison_screen.dart';
+import 'health_report_screen.dart';
+import 'share_results_screen.dart';
 
 class UtilitiesScreen extends StatelessWidget {
   const UtilitiesScreen({super.key});
@@ -199,7 +202,7 @@ class UtilitiesScreen extends StatelessWidget {
               subtitle: 'So sánh chỉ số với chuẩn quốc tế',
               icon: Icons.compare_arrows,
               color: Colors.teal,
-              onTap: () => _showComingSoon(context, 'So sánh với chuẩn'),
+              onTap: () => _navigateToScreen(context, const ComparisonScreen()),
               isFullWidth: true,
             ),
 
@@ -211,7 +214,7 @@ class UtilitiesScreen extends StatelessWidget {
               subtitle: 'Tạo báo cáo PDF chi tiết',
               icon: Icons.description,
               color: Colors.indigo,
-              onTap: () => _showComingSoon(context, 'Báo cáo sức khỏe'),
+              onTap: () => _navigateToScreen(context, const HealthReportScreen()),
               isFullWidth: true,
             ),
 
@@ -223,7 +226,7 @@ class UtilitiesScreen extends StatelessWidget {
               subtitle: 'Chia sẻ thành tích với bạn bè',
               icon: Icons.share,
               color: Colors.pink,
-              onTap: () => _showComingSoon(context, 'Chia sẻ kết quả'),
+              onTap: () => _navigateToScreen(context, const ShareResultsScreen()),
               isFullWidth: true,
             ),
 

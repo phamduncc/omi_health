@@ -39,6 +39,7 @@ dependencies:
   fl_chart: ^0.71.0
   http: ^1.1.0
   dio: ^5.4.0
+  share_plus:
 
 dev_dependencies:
   flutter_test:
